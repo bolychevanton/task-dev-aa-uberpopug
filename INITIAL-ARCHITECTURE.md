@@ -8,7 +8,7 @@
   - [Рабочий процесс](#рабочий-процесс)
   - [Как решать проблемы с данными](#как-решать-проблемы-с-данными)
   - [Проблемные места в архитектуре](#проблемные-места-в-архитектуре)
-- [Architecture][#architecture]
+- [Architecture](#architecture)
   - [Message Broker](#message-broker)
   - [Web Server](#web-server)
   - [Database](#database)
