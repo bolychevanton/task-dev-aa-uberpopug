@@ -18,14 +18,14 @@
     - [task_prices](#task_prices)
     - [account_transfers](#account_transfers)
   - [Auth Service](#auth-service)
-    - [Rest API](#rest-api)
+    - [Rest API](#auth-service-rest-api)
   - [Task-Tracker Service](#task-tracker-service)
-    - [REST API](#rest-api)
+    - [REST API](#task-tracker-service-rest-api)
   - [Accounting Service](#accounting-service)
     - [Обработка сообщений](#обработка-сообщений)
-    - [REST API](#rest-api)
+    - [REST API](#accounting-service-rest-api)
   - [Service Analytics](#service-analytics)
-    - [REST API](#rest-api)
+    - [REST API](#service-analytics-rest-api)
   - [Payment Service](#payment-service)
 
 ## Общий поток данных
@@ -127,7 +127,7 @@ Tаблица, содержащая информацию про пользова
 ## Auth Service
 
 твечает за регистрацию и аутентификацию пользователей, выдачу токенов и хранение данных о пользователях в соответствующей таблице базы данных.
-### Rest API
+### Auth Service REST API
 
 - `register_user` — создаёт юзера с конкретной ролью
     - Делает запись в бд о новом юзере в таблицу [users](#users)
@@ -137,7 +137,7 @@ Tаблица, содержащая информацию про пользова
 ## Task-Tracker Service
 
 Управляет задачами, их созданием, назначением и отслеживанием их выполнения.  Служба регистрирует журналы активности, а также информирует [Accounting Service](#accounting-service) о финансовых изменениях, связанных с заданиями через [Message Broker](#message-broker).
-### REST API
+### Task-Tracker Service REST API
 
 - `create_task` — создается новая задача.
   - Пишет в [tasks](#tasks) запись о новой задаче. Попуг ассайнится случайно автоматически.
@@ -167,7 +167,7 @@ Tаблица, содержащая информацию про пользова
   - создает запись в [account_transfers](#account_transfers) о списании
 - При получении сообщения о том, что задача была выполнена
   - создает запись в [account_transfers](#account_transfers) о начислении
-### REST API
+### Accounting Service REST API
 
 - `show_balance` - показывает текущий баланс сотрудника
   - Делает sqlзапрос в [account_transfers](#account_transfers)
@@ -181,7 +181,7 @@ Tаблица, содержащая информацию про пользова
 
 Собирает и обрабатывает данные о финансовых показателях и производительности компании, предоставляя администраторам аналитические отчеты.
 
-### REST API
+### Service Analytics REST API
 - `today_income` - показывает доход за сегодня
   - читает данные из [account_transfers](#account_transfers)
 - `negative_balances`
@@ -191,4 +191,4 @@ Tаблица, содержащая информацию про пользова
 
 ## Payment Service
 
-- Каждые 24 часа дергает ручку [Accounting Service](#accounting-service)/[REST API](#rest-api)/`pay_to_workers`
+- Каждые 24 часа дергает ручку [Accounting Service REST API](#accounting-service-rest-api)/`pay_to_workers`
