@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "common"
+version = "0.0.1"
+description = "Centralized library of reusable procedures and functions"
+authors = ["abolychev <bolychev.anton@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyjwt = "^2.8.0"
+fastapi = {extras = ["all"], version = "^0.110.0"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

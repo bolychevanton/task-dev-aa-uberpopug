@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "auth"
+version = "0.1.0"
+description = "Authorization & authentification service"
+authors = ["abolychev <bolychev.anton@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = {extras = ["all"], version = "^0.110.0"}
+pyjwt = "^2.8.0"
+passlib = "^1.7.4"
+sqlmodel = "^0.0.16"
+common = {path = "../common", develop = true}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
