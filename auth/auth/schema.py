@@ -1,6 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class AuthDetails(BaseModel):
-    username: str
+    fullname: str
+    email: EmailStr
     password: str
+    role: str

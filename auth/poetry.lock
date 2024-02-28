@@ -433,6 +433,21 @@ files = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.7.2"
+description = "NATS client for Python"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "nats-py-2.7.2.tar.gz", hash = "sha256:0c97b4a57bed0ef1ff9ae6c19bc115ec7ca8ede5ab3e001fd00a377056a547cf"},
+]
+
+[package.extras]
+aiohttp = ["aiohttp"]
+fast-parse = ["fast-mail-parser"]
+nkeys = ["nkeys"]
+
+[[package]]
 name = "orjson"
 version = "3.9.15"
 description = "Fast, correct Python JSON library supporting dataclasses, datetimes, and numpy"
@@ -1214,4 +1229,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "f7367f183d3bb39b37766db778d6947a032ba65ecf876d2693cdb0ac93e6a562"
+content-hash = "14e8602e00a60a761778f21c3cece082966400dbe35041e61bf613f0367fcbab"

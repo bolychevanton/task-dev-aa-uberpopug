@@ -13,6 +13,7 @@ pyjwt = "^2.8.0"
 passlib = "^1.7.4"
 sqlmodel = "^0.0.16"
 common = {path = "../common", develop = true}
+nats-py = "^2.7.2"
 
 
 [build-system]
