@@ -6,8 +6,8 @@ services:
     ports:
       - "4222:4222"
     command: -js
-    volumes:
-      - ${NATS_DATA_DIR}:/tmp/nats/jetstream
+    # volumes:
+    #   - ${NATS_DATA_DIR}:/tmp/nats/jetstream
 
   db:
     image: postgres:latest

@@ -8,10 +8,10 @@ class Account(SQLModel, table=True):
     __tablename__ = "accounts"
 
     id: int = Field(default=None, primary_key=True)
-    public_id: str = Field(unique=True, default_factory=uuid.uuid4)
+    public_id: str = Field(unique=True)
     fullname: str
     email: EmailStr = Field(sa_column=Column(TEXT))  # used as login for simplicity
     role: str
     password_hash: str
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)

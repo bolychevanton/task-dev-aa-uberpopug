@@ -14,6 +14,8 @@ passlib = "^1.7.4"
 sqlmodel = "^0.0.16"
 common = {path = "../common", develop = true}
 nats-py = "^2.7.2"
+psycopg2-binary = "^2.9.9"
+asyncpg = "^0.29.0"
 
 
 [build-system]
