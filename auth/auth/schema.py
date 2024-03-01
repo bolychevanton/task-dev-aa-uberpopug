@@ -5,7 +5,6 @@ class RegisterDetails(BaseModel):
     fullname: str
     email: EmailStr
     password: str
-    role: str
 
 
 class LoginDetails(BaseModel):
