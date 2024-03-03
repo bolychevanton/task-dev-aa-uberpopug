@@ -2,38 +2,45 @@
 
 This repository is maintained by me, Anton Bolychev, for educational purposes, specifically for the [Async Architecture course](https://tough-dev.school/architecture).
 
-## Repo structure
+## Repository Overview
 
-The project consists of several microservices, that are organazied as pure API applications. At the moment they are 
+This repository is organized into multiple microservices, designed as API-only applications. The microservices included are:
 
-- [Auth service](#auth-service)
-- [Task tracker](#task-tracker)
+- [Auth Service](#auth-service)
+- [Task Tracker](#task-tracker)
 
-The main language is python. Database used postgres. Nats Jestream is the message broker. 
+The primary programming language is Python, with Postgres as the database and Nats Jestream serving as the message broker.
 
-The 2 core python packages for the projects are 
+The project heavily relies on two core Python packages:
 
-- [FastAPI](https://fastapi.tiangolo.com/) - web framework for building APIs with Python 3.8+ based on standard Python type hints. 
-- [FastStream](https://faststream.airt.ai/latest/faststream/) - the framework that simplifies the process of writing producers and consumers for message queues, handling all the parsing, networking and documentation generation automatically.
+- [FastAPI](https://fastapi.tiangolo.com/): A web framework for building APIs with Python 3.8+, utilizing standard Python type hints.
+- [FastStream](https://faststream.airt.ai/latest/faststream/): A framework that simplifies the creation of producers and consumers for message queues, providing automatic parsing, networking, and documentation generation.
 
-They well integrated into each other, thus providing to write the main logics in one file and start the application in 1 command
+These packages are well-integrated, allowing the main logic to be written in a single file and the application to be launched with a single command:
 
-```
+```bash
 cd servicename/app
 uvicorn --port=YOUR_PORT main:api --reload
 ```
 
-### Auth service 
-Authentification service is done on the basis of jwt tokens.
-- [auth/](./auth) - the main folder
-    - [auth/app/main.py] - main application. Core file with the main logics.
-    - [auth/auth](./auth/auth/) - configs, dbmodel, password hashing functions, request schemas 
-### Task tracker
+### Auth Service
 
-- [tasktracker](./tasktracker/) - the main folder
-    - [tasktracker/app/main.py](./tasktracker/app/main.py) - main application. Core file with the main logics.
-    - [tasktracker/tasktracker/](./tasktracker/tasktracker/) - configs, dbmodel
+The Auth Service implements authentication using JWT tokens.
 
-### Separate library that provides the common functionality for all the services
-At the moment it is used only for authorization and decoding of jwt tokens and consists of only one file
-- [common/common/authorizer.py](./common/common/authorizer.py)
+- [`auth/`](./auth): The primary directory for the Auth Service.
+  - [`auth/app/main.py`](./auth/app/main.py): The main application file containing the core logic.
+  - [`auth/auth`](./auth/auth/): Directory containing configurations, database models, password hashing functions, and request schemas.
+
+### Task Tracker
+
+The Task Tracker manages tasks and their tracking.
+
+- [`tasktracker/`](./tasktracker/): The primary directory for the Task Tracker.
+  - [`tasktracker/app/main.py`](./tasktracker/app/main.py): The main application file with the core logic.
+  - [`tasktracker/tasktracker/`](./tasktracker/tasktracker/): Directory containing configurations and database models.
+
+### Common Library
+
+A separate library is included to provide shared functionality across all services. Currently, it is utilized for authorization and decoding JWT tokens.
+
+- [`common/common/authorizer.py`](./common/common/authorizer.py): The single file in the common library responsible for authorization.
