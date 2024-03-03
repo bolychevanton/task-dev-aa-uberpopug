@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.testclient import TestClient
 from common.authorizer import Authorizer
 from auth.schema import RegisterDetails, LoginDetails
 from auth.authenticator import Authentificator
@@ -34,22 +33,10 @@ async def add_account(fullname: str, email: str, password: str, role: str) -> No
         )
         session.add(new_account)
         await session.commit()
-        event_data = orjson.dumps(
-            dict(
-                public_id=new_account.public_id,
-                fullname=new_account.fullname,
-                email=new_account.email,
-                role=new_account.role,
-                created_at=new_account.created_at,
-            )
-        )
-    await broker.publish(
-        event_data, "accounts-streams.account-created", stream=stream.name
-    )
+        msg = new_account.model_dump_json(exclude=["password_hash"])
+    await broker.publish(msg, "accounts-streams.account-created", stream=stream.name)
     # Maybe not reasonable to publish BE here, but just in case
-    await broker.publish(
-        event_data, "accounts.account-created", stream=stream.name
-    )  # be
+    await broker.publish(msg, "accounts.account-created", stream=stream.name)  # be
 
 
 @asynccontextmanager
@@ -166,7 +153,6 @@ async def change_role(
         session.add(account)
         await session.commit()
         await session.refresh(account)
-        print("REFRESGE", account)
         event_data = orjson.dumps(
             dict(
                 public_id=account.public_id,

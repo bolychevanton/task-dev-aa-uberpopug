@@ -38,11 +38,11 @@ def create_task(role, role_id, description):
     )
 
 
-def shuffle_tasks(role, id):
-    requests.post(
-        f"{tt_host}/shuffle-tasks",
-        headers={"Authorization": f"Bearer {login(role, id)}"},
-    )
+# def shuffle_tasks(role, id):
+#     requests.post(
+#         f"{tt_host}/shuffle-tasks",
+#         headers={"Authorization": f"Bearer {login(role, id)}"},
+#     )
 
 
 # for idx in range(1, 4):
@@ -57,5 +57,11 @@ def shuffle_tasks(role, id):
 #     create_task("worker", 3, "worker" + str(3))
 #     create_task("manager", 1, "manager" + str(1))
 
+print(login("worker", 1))
 
-shuffle_tasks("manager", 1)
+# print(
+#     requests.get(
+#         f"{tt_host}/tasks/me",
+#         headers={"Authorization": f"Bearer {login('worker', 1)}"},
+#     )
+# )

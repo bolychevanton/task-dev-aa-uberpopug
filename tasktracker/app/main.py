@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from faststream.nats import NatsBroker, JStream
 import numpy as np
-from typing import Literal
+from typing import Literal, Optional
 
 broker = NatsBroker(nats_url)
 stream = JStream(name="tasks", subjects=["tasks.*", "tasks-streams.*"])
@@ -82,9 +82,9 @@ async def role_changed(public_id: str, fullname: str, email: str, role: str):
 
 @asynccontextmanager
 async def instantiate_db_and_broker(app: FastAPI):
-
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
+
     await broker.start()
     await broker.stream.add_stream(config=stream.config)
     yield
@@ -104,16 +104,11 @@ async def create_task(description: str):
         )
         session.add(new_task)
         await session.commit()
-        event_data = orjson.dumps(
-            dict(
-                public_id=new_task.public_id,
-                description=new_task.description,
-                assigned_to=new_task.assigned_to,
-                created_at=new_task.created_at,
-            )
+        msg = new_task.model_dump_json(
+            include={"public_id", "description", "assigned_to", "created_at"}
         )
-    await broker.publish(event_data, "tasks-streams.task-created")
-    await broker.publish(event_data, "tasks.task-created")
+        await broker.publish(msg, "tasks-streams.task-created", stream=stream.name)
+        await broker.publish(msg, "tasks.task-created", stream=stream.name)
 
 
 @api.post(
@@ -123,33 +118,29 @@ async def create_task(description: str):
 )
 async def shuffle_tasks():
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        open_tasks = await session.exec(
-            select(dbmodel.Task).where(col(dbmodel.Task.status) == "open")
-        )
-        random_popugs_uuids = await random_popugs(size=100)
-        print(random_popugs_uuids)
-        i = 0
-        for task in open_tasks:
+        open_tasks = (
+            await session.exec(
+                select(dbmodel.Task).where(col(dbmodel.Task.status) == "open")
+            )
+        ).all()
+        random_popugs_uuids = await random_popugs(size=len(open_tasks))
+        for i, task in enumerate(open_tasks):
             task.assigned_to = random_popugs_uuids[i]
             task.updated_at = datetime.now()
             session.add(task)
             await session.commit()
             await session.refresh(task)
-            event_data = orjson.dumps(
-                dict(
-                    public_id=task.public_id,
-                    description=task.description,
-                    assigned_to=task.assigned_to,
-                    updated_at=task.created_at,
-                )
+            msg = task.model_dump_json(
+                include={"public_id", "assigned_to", "updated_at", "description"}
             )
-            i += 1
-            await broker.publish(event_data, "tasks-streams.task-assignee-updated")
-            await broker.publish(event_data, "tasks.task-assignee-updated")
+            await broker.publish(
+                msg, "tasks-streams.task-assignee-updated", stream=stream.name
+            )
+            await broker.publish(msg, "tasks.task-assignee-updated", stream=stream.name)
 
 
-@api.post("/tasks", status_code=201, dependencies=[Depends(authorizer)])
-async def tasks(status: Literal["closed", "open"] = None):
+@api.get("/tasks", status_code=200, dependencies=[Depends(authorizer)])
+async def tasks(status: Optional[Literal["closed", "open"]] = None):
     async with AsyncSession(engine, expire_on_commit=False) as session:
         if status is None:
             tasks = await session.exec(select(dbmodel.Task))
@@ -157,12 +148,12 @@ async def tasks(status: Literal["closed", "open"] = None):
             tasks = await session.exec(
                 select(dbmodel.Task).where(col(dbmodel.Task.status) == status)
             )
-        return tasks.all()
+        return [task.model_dump() for task in tasks.all()]
 
 
-@api.post("/tasks/me", status_code=201)
+@api.get("/tasks-me", status_code=200)
 async def show_my_tasks(
-    public_id=Depends(authorizer), status: Literal["closed", "open"] | None = None
+    public_id=Depends(authorizer), status: Optional[Literal["closed", "open"]] = None
 ):
     async with AsyncSession(engine, expire_on_commit=False) as session:
         if status is None:
@@ -175,10 +166,10 @@ async def show_my_tasks(
                 .where(col(dbmodel.Task.assigned_to) == public_id)
                 .where(col(dbmodel.Task.status) == status)
             )
-        return tasks.all()
+        return [task.model_dump() for task in tasks.all()]
 
 
-@api.post("/close-task", status_code=201)
+@api.post("/close-task", status_code=200)
 async def close_task(task_public_id: str, public_id: str = Depends(authorizer)):
     async with AsyncSession(engine, expire_on_commit=False) as session:
         task = (
@@ -199,15 +190,10 @@ async def close_task(task_public_id: str, public_id: str = Depends(authorizer)):
         session.add(task)
         await session.commit()
         await session.refresh(task)
-        event_data = orjson.dumps(
-            dict(
-                public_id=task.public_id,
-                description=task.description,
-                assigned_to=task.assigned_to,
-                updated_at=task.updated_at,
-            )
+        msg = task.model_dump_json(
+            include={"public_id", "assigned_to", "updated_at", "description"}
         )
-        await broker.publish(event_data, "tasks-streams.task-closed")
-        await broker.publish(event_data, "tasks.task-closed")
+        await broker.publish(msg, "tasks-streams.task-closed", stream=stream.name)
+        await broker.publish(msg, "tasks.task-closed", stream=stream.name)
 
     return "Task closed"
