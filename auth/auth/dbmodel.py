@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class Account(SQLModel, table=True):
-    __tablename__ = "accounts"
+    __tablename__ = "auth_accounts"
 
     id: int = Field(default=None, primary_key=True)
     public_id: str = Field(unique=True, index=True)

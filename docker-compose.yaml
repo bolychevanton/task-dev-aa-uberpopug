@@ -9,7 +9,7 @@ services:
     # volumes:
     #   - ${NATS_DATA_DIR}:/tmp/nats/jetstream
 
-  db:
+  db-auth:
     image: postgres:latest
     restart: unless-stopped
     ports:
