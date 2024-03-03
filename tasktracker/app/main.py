@@ -10,7 +10,6 @@ from tasktracker import dbmodel
 from sqlmodel import select, col
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio.engine import create_async_engine
-import orjson
 from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime
@@ -33,8 +32,10 @@ async def random_popugs(size: int = 1) -> list[str]:
                 .where(col(dbmodel.Account.role) != "admin")
             )
         ).all()
-
-    return [popugs[i] for i in np.random.randint(len(popugs), size=size)]
+    if len(popugs) > 0:
+        return [popugs[i] for i in np.random.randint(len(popugs), size=size)]
+    else:
+        return []
 
 
 @broker.subscriber(
@@ -96,17 +97,20 @@ api = FastAPI(lifespan=instantiate_db_and_broker)
 
 @api.post("/create-task", status_code=201, dependencies=[Depends(authorizer)])
 async def create_task(description: str):
+    random_popug = await random_popugs(size=1)
+    if len(random_popug) == 0:
+        raise HTTPException(status_code=403, detail="No popug available")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         new_task = dbmodel.Task(
             public_id=str(uuid.uuid4()),
             description=description,
-            assigned_to=(await random_popugs())[0],
+            assigned_to=random_popug[0],
         )
         session.add(new_task)
         await session.commit()
         msg = new_task.model_dump_json(
             include={"public_id", "description", "assigned_to", "created_at"}
-        )
+        ).encode()
         await broker.publish(msg, "tasks-streams.task-created", stream=stream.name)
         await broker.publish(msg, "tasks.task-created", stream=stream.name)
 
@@ -123,20 +127,28 @@ async def shuffle_tasks():
                 select(dbmodel.Task).where(col(dbmodel.Task.status) == "open")
             )
         ).all()
+
         random_popugs_uuids = await random_popugs(size=len(open_tasks))
+        if len(random_popugs_uuids) == 0:
+            raise HTTPException(status_code=403, detail="No popugs available")
+
+        shuffled = []
         for i, task in enumerate(open_tasks):
             task.assigned_to = random_popugs_uuids[i]
             task.updated_at = datetime.now()
             session.add(task)
             await session.commit()
             await session.refresh(task)
+            shuffled.append(task.model_dump())
             msg = task.model_dump_json(
                 include={"public_id", "assigned_to", "updated_at", "description"}
-            )
+            ).encode()
             await broker.publish(
                 msg, "tasks-streams.task-assignee-updated", stream=stream.name
             )
             await broker.publish(msg, "tasks.task-assignee-updated", stream=stream.name)
+
+    return shuffled
 
 
 @api.get("/tasks", status_code=200, dependencies=[Depends(authorizer)])
@@ -192,7 +204,7 @@ async def close_task(task_public_id: str, public_id: str = Depends(authorizer)):
         await session.refresh(task)
         msg = task.model_dump_json(
             include={"public_id", "assigned_to", "updated_at", "description"}
-        )
+        ).encode()
         await broker.publish(msg, "tasks-streams.task-closed", stream=stream.name)
         await broker.publish(msg, "tasks.task-closed", stream=stream.name)
 

@@ -6,12 +6,10 @@ tt_host = "http://127.0.0.1:2001"
 
 
 def login(role, id=""):
-    return eval(
-        requests.get(
-            f"{auth_host}/login",
-            json={"email": f"{role}{id}@popug.com", "password": "password"},
-        ).text
-    )
+    return requests.get(
+        f"{auth_host}/login",
+        json={"email": f"{role}{id}@popug.com", "password": "password"},
+    ).text
 
 
 def create(role, id=""):
@@ -38,11 +36,18 @@ def create_task(role, role_id, description):
     )
 
 
-# def shuffle_tasks(role, id):
-#     requests.post(
-#         f"{tt_host}/shuffle-tasks",
-#         headers={"Authorization": f"Bearer {login(role, id)}"},
-#     )
+def shuffle_tasks(role, id):
+    requests.post(
+        f"{tt_host}/shuffle-tasks",
+        headers={"Authorization": f"Bearer {login(role, id)}"},
+    )
+
+
+def my_tasks(role, id):
+    return requests.get(
+        f"{tt_host}/tasks-me",
+        headers={"Authorization": f"Bearer {login(role, id)}"},
+    )
 
 
 # for idx in range(1, 4):
@@ -57,7 +62,10 @@ def create_task(role, role_id, description):
 #     create_task("worker", 3, "worker" + str(3))
 #     create_task("manager", 1, "manager" + str(1))
 
-print(login("worker", 1))
+# shuffle_tasks("manager", 1)
+# print(login("worker", 1))
+
+print(my_tasks("worker", 1).text)
 
 # print(
 #     requests.get(

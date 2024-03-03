@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime
 from faststream.nats import NatsBroker, JStream
-
+from fastapi.responses import PlainTextResponse
+from typing import Optional
 
 broker = NatsBroker(nats_url)
 stream = JStream(name="auth", subjects=["accounts.*", "accounts-streams.*"])
@@ -33,17 +34,18 @@ async def add_account(fullname: str, email: str, password: str, role: str) -> No
         )
         session.add(new_account)
         await session.commit()
-        msg = new_account.model_dump_json(exclude=["password_hash"])
+        msg = new_account.model_dump_json(
+            exclude={"password_hash", "created_at", "updated_at", "id"}
+        ).encode()
+
     await broker.publish(msg, "accounts-streams.account-created", stream=stream.name)
-    # Maybe not reasonable to publish BE here, but just in case
-    await broker.publish(msg, "accounts.account-created", stream=stream.name)  # be
+    await broker.publish(msg, "accounts.account-created", stream=stream.name)
 
 
 @asynccontextmanager
 async def instantiate_db_and_broker(app: FastAPI):
-    await broker.connect(nats_url)
+    await broker.start()
     await broker.stream.add_stream(config=stream.config)
-    print("connected")
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
 
@@ -69,8 +71,8 @@ async def instantiate_db_and_broker(app: FastAPI):
 api = FastAPI(lifespan=instantiate_db_and_broker)
 
 
-@api.post("/register", status_code=201)
-async def register(register_details: RegisterDetails):
+@api.post("/register", status_code=201, response_class=PlainTextResponse)
+async def register(register_details: RegisterDetails) -> str:
     async with AsyncSession(engine, expire_on_commit=False) as session:
         account_with_email = (
             await session.exec(
@@ -90,8 +92,8 @@ async def register(register_details: RegisterDetails):
     return "Account created"
 
 
-@api.get("/login")
-async def login(login_details: LoginDetails):
+@api.get("/login", response_class=PlainTextResponse)
+async def login(login_details: LoginDetails) -> str:
     async with AsyncSession(engine, expire_on_commit=False) as session:
         account_with_email = (
             await session.exec(
@@ -127,10 +129,11 @@ async def login(login_details: LoginDetails):
     "/change-role",
     status_code=200,
     dependencies=[Depends(authorizer.restrict_access(to=["admin", "manager"]))],
+    response_class=PlainTextResponse,
 )
 async def change_role(
-    role: str, public_user_id: str | None = None, email: str | None = None
-):
+    role: str, public_user_id: Optional[str] = None, email: Optional[str] = None
+) -> str:
     if (public_user_id is None) + (email is None) != 1:
         raise HTTPException(
             status_code=400, detail="Provide either public_user_id or email"
@@ -153,17 +156,8 @@ async def change_role(
         session.add(account)
         await session.commit()
         await session.refresh(account)
-        event_data = orjson.dumps(
-            dict(
-                public_id=account.public_id,
-                fullname=account.fullname,
-                email=account.email,
-                role=account.role,
-                updated_at=account.updated_at,
-            )
-        )
-
-    await broker.publish(
-        event_data, "accounts-streams.role-changed", stream=stream.name
-    )
-    return f"Role for {account.email} changed"
+        msg = account.model_dump_json(
+            exclude={"password_hash", "created_at", "id"}
+        ).encode()
+    await broker.publish(msg, "accounts-streams.role-changed", stream=stream.name)
+    return f"Role for {account.email} changed to {account.role}"
