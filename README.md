@@ -9,14 +9,15 @@ This repository is organized into multiple microservices, designed as API-only a
 - [Auth Service](#auth-service)
 - [Task Tracker](#task-tracker)
 
-The primary programming language is Python, with Postgres as the database and Nats Jestream serving as the message broker.
+The primary programming language is Python, with Postgres as the database and Nats Jetstream serving as the message broker.
 
-The project heavily relies on two core Python packages:
+The project heavily relies on the following Python packages:
 
 - [FastAPI](https://fastapi.tiangolo.com/): A web framework for building APIs with Python 3.8+, utilizing standard Python type hints.
-- [FastStream](https://faststream.airt.ai/latest/faststream/): A framework that simplifies the creation of producers and consumers for message queues, providing automatic parsing, networking, and documentation generation.
+- [FastStream](https://faststream.airt.ai/latest/faststream/) simplifies the creation of producers and consumers for message queues, providing automatic parsing, networking, and documentation generation.
+- [SQLModel](https://sqlmodel.tiangolo.com/) is a library for interacting with SQL databases from Python code, with Python objects and designed to be compatible with [FastAPI](https://fastapi.tiangolo.com/), [Pydantic](https://docs.pydantic.dev/latest/), and [SQLAlchemy](https://www.sqlalchemy.org/).
 
-These packages are well-integrated, allowing the main logic to be written in a single file and the application to be launched with a single command:
+These packages are well-integrated between each other, allowing the main logic to be written in a single file and the application to be launched with a single command:
 
 ```bash
 cd servicename/app

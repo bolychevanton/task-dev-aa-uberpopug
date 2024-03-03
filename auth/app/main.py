@@ -1,3 +1,5 @@
+"""The main application file containing the core logic of Auth service."""
+
 from fastapi import FastAPI, Depends, HTTPException
 from common.authorizer import Authorizer
 from auth.schema import RegisterDetails, LoginDetails
@@ -24,6 +26,14 @@ engine = create_async_engine(db_url, echo=True)
 
 
 async def add_account(fullname: str, email: str, password: str, role: str) -> None:
+    """Utility function to add new account into database.
+
+    Args:
+        fullname: full name of popug to add
+        email: popug's email address. Also used as login
+        password: popug's password
+        role: popug's role
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         new_account = dbmodel.Account(
             fullname=fullname,
@@ -44,6 +54,12 @@ async def add_account(fullname: str, email: str, password: str, role: str) -> No
 
 @asynccontextmanager
 async def instantiate_db_and_broker(app: FastAPI):
+    """Utility function to instantiate database and broker when app starts.
+
+    Args:
+        app: FastAPI app
+    """
+
     await broker.start()
     await broker.stream.add_stream(config=stream.config)
     async with engine.begin() as conn:
@@ -73,6 +89,17 @@ api = FastAPI(lifespan=instantiate_db_and_broker)
 
 @api.post("/register", status_code=201, response_class=PlainTextResponse)
 async def register(register_details: RegisterDetails) -> str:
+    """Registers new account with user role.
+
+    Args:
+        register_details: email (a.k.a. login), password, and full name
+
+    Raises:
+        HTTPException: If email is already taken
+
+    Returns:
+        Message that account was created.
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         account_with_email = (
             await session.exec(
@@ -94,6 +121,17 @@ async def register(register_details: RegisterDetails) -> str:
 
 @api.get("/login", response_class=PlainTextResponse)
 async def login(login_details: LoginDetails) -> str:
+    """Get auth JWT token.
+
+    Args:
+        login_details: email and password
+
+    Raises:
+        HTTPException: if invalid email and/or password
+
+    Returns:
+        JWT token
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         account_with_email = (
             await session.exec(
@@ -134,6 +172,20 @@ async def login(login_details: LoginDetails) -> str:
 async def change_role(
     role: str, public_user_id: Optional[str] = None, email: Optional[str] = None
 ) -> str:
+    """Changes popug's role either by public_user_id or by email.
+
+    Args:
+        role: new role
+        public_user_id: uuid of popug.
+        email: email of popug
+
+    Raises:
+        HTTPException: if no public_user_id or email is provided
+        HTTPException: Account not found
+
+    Returns:
+        Message that role was changed.
+    """
     if (public_user_id is None) + (email is None) != 1:
         raise HTTPException(
             status_code=400, detail="Provide either public_user_id or email"

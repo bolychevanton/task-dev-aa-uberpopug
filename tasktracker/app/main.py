@@ -1,3 +1,5 @@
+"""The main application file containing the core logic of Task Tracker."""
+
 from fastapi import FastAPI, Depends, HTTPException
 from common.authorizer import Authorizer
 from tasktracker.config import (
@@ -24,6 +26,14 @@ engine = create_async_engine(db_url, echo=True)
 
 
 async def random_popugs(size: int = 1) -> list[str]:
+    """Utility function to get random popugs from database that are not managers or admins
+
+    Args:
+        size: the amount of popugs to get. Defaults to 1.
+
+    Returns:
+        List of public_ids of random popugs
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         popugs = (
             await session.exec(
@@ -44,6 +54,14 @@ async def random_popugs(size: int = 1) -> list[str]:
     deliver_policy="all",
 )
 async def handle_new_account(public_id: str, fullname: str, email: str, role: str):
+    """Handles CUD event of new account.
+
+    Args:
+        public_id: uuid of new account
+        fullname: full name of new account
+        email: email of new account
+        role: role of new account
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         session.add(
             dbmodel.Account(
@@ -59,6 +77,14 @@ async def handle_new_account(public_id: str, fullname: str, email: str, role: st
     deliver_policy="all",
 )
 async def role_changed(public_id: str, fullname: str, email: str, role: str):
+    """Handles CUD event of account's role change.
+
+    Args:
+        public_id: uuid of account
+        fullname: fullname
+        email: email
+        role: new role
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         account = (
             await session.exec(
@@ -83,6 +109,11 @@ async def role_changed(public_id: str, fullname: str, email: str, role: str):
 
 @asynccontextmanager
 async def instantiate_db_and_broker(app: FastAPI):
+    """Utility function to instantiate database and broker when app starts.
+
+    Args:
+        app: FastAPI app
+    """
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
 
@@ -97,6 +128,14 @@ api = FastAPI(lifespan=instantiate_db_and_broker)
 
 @api.post("/create-task", status_code=201, dependencies=[Depends(authorizer)])
 async def create_task(description: str):
+    """Creates a new task for authorized popug.
+
+    Args:
+        description: Task description
+
+    Raises:
+        HTTPException: If no workers are available
+    """
     random_popug = await random_popugs(size=1)
     if len(random_popug) == 0:
         raise HTTPException(status_code=403, detail="No popug available")
@@ -121,6 +160,14 @@ async def create_task(description: str):
     dependencies=[Depends(authorizer.restrict_access(to=["manager", "admin"]))],
 )
 async def shuffle_tasks():
+    """Assigns open tasks to random popugs.
+
+    Raises:
+        HTTPException: if no workers are available.
+
+    Returns:
+        Json of reassigned tasks
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         open_tasks = (
             await session.exec(
@@ -153,6 +200,14 @@ async def shuffle_tasks():
 
 @api.get("/tasks", status_code=200, dependencies=[Depends(authorizer)])
 async def tasks(status: Optional[Literal["closed", "open"]] = None):
+    """Shows all tasks or filtered by status for authorized popug.
+
+    Args:
+        status: Task status (for filtering)
+
+    Returns:
+        Json of tasks
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         if status is None:
             tasks = await session.exec(select(dbmodel.Task))
@@ -167,6 +222,15 @@ async def tasks(status: Optional[Literal["closed", "open"]] = None):
 async def show_my_tasks(
     public_id=Depends(authorizer), status: Optional[Literal["closed", "open"]] = None
 ):
+    """Shows all tasks (of filtered by status) assigned to authorized popug.
+
+    Args:
+        public_id: uuid of authorized popug.
+        status: filter by status.
+
+    Returns:
+        Json of tasks
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         if status is None:
             tasks = await session.exec(
@@ -183,6 +247,19 @@ async def show_my_tasks(
 
 @api.post("/close-task", status_code=200)
 async def close_task(task_public_id: str, public_id: str = Depends(authorizer)):
+    """Closes tasks assigned to authorized popug.
+
+    Args:
+        task_public_id: uuid of task
+        public_id: uuid of authorized popug
+
+    Raises:
+        HTTPException: if task is not found
+        HTTPException: if task is not assigned to authorized popug
+
+    Returns:
+        _description_
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         task = (
             await session.exec(
