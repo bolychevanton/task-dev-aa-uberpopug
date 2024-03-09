@@ -14,5 +14,3 @@ class Account(SQLModel, table=True):
     )  # used as login for simplicity
     role: str
     password_hash: str
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
