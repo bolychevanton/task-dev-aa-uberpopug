@@ -153,3 +153,32 @@ class TaskAddedV2(AvroBaseModel):
 
 
 save_schema(TaskAddedV2, schemas / "tasktracker")
+
+
+class FinTransactionAppliedV1(AvroBaseModel):
+    class Name(Enum):
+        name = "FinTransactionApplied"
+
+    class Version(Enum):
+        version = "v1"
+
+    class Data(AvroBaseModel):
+        class TransactionType(Enum):
+            enrollment = "enrollment"
+            withdrawal = "withdrawal"
+            payment = "payment"
+
+        account_public_id: str
+        type: TransactionType
+        description: str
+        amount: float
+
+    id: str
+    time: datetime
+    name: Name = Name.name
+    version: Version = Version.version
+    producer: str = "accounting"
+    data: Data
+
+
+save_schema(FinTransactionAppliedV1, schemas / "accounting")
