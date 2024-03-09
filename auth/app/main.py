@@ -1,5 +1,12 @@
 """The main application file containing the core logic of Auth service."""
 
+from common.generate_events_from_schemas import generate_events_from_avro_schemas
+from auth.config import service_root
+
+generate_events_from_avro_schemas(service_root)
+
+from auth.eventschema.auth import AccountCreated, AccountUpdated
+
 from fastapi import FastAPI, Depends, HTTPException
 from common.authorizer import Authorizer
 from auth.schema import RegisterDetails, LoginDetails
@@ -10,7 +17,6 @@ from auth import dbmodel
 from sqlmodel import select, col
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio.engine import create_async_engine
-import orjson
 from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime
@@ -18,15 +24,16 @@ from faststream.nats import NatsBroker, JStream
 from fastapi.responses import PlainTextResponse
 from typing import Optional
 
+
 broker = NatsBroker(nats_url)
-stream = JStream(name="auth", subjects=["accounts.*", "accounts-streams.*"])
+jstream = JStream(name="auth", subjects=["accounts-streams.*"])
 auhtentificator = Authentificator(key=private_key, algorithm=algorithm, expire=expire)
 authorizer = Authorizer(key=public_key, algorithm=algorithm)
 engine = create_async_engine(db_url, echo=True)
 
 
-async def add_account(fullname: str, email: str, password: str, role: str) -> None:
-    """Utility function to add new account into database.
+async def register_account(fullname: str, email: str, password: str, role: str) -> None:
+    """Utility function to register new account via adding it to database.
 
     Args:
         fullname: full name of popug to add
@@ -44,24 +51,37 @@ async def add_account(fullname: str, email: str, password: str, role: str) -> No
         )
         session.add(new_account)
         await session.commit()
-        msg = new_account.model_dump_json(
-            exclude={"password_hash", "created_at", "updated_at", "id"}
-        ).encode()
+        msg = AccountCreated.v1.AccountCreatedV1(
+            id=str(uuid.uuid4()),
+            time=datetime.now(),
+            data=AccountCreated.v1.Data(
+                public_id=new_account.public_id,
+                email=new_account.email,
+                role=role,
+                fullname=fullname,
+            ),
+        )
 
-    await broker.publish(msg, "accounts-streams.account-created", stream=stream.name)
-    await broker.publish(msg, "accounts.account-created", stream=stream.name)
+    await broker.publish(
+        msg.model_dump_json().encode(),
+        f"accounts-streams.{msg.name.value}.{msg.version.value}",
+        stream=jstream.name,
+    )
 
 
 @asynccontextmanager
 async def instantiate_db_and_broker(app: FastAPI):
     """Utility function to instantiate database and broker when app starts.
 
+    Note:
+        This function registers admin account if it doesn't exist.
+
     Args:
         app: FastAPI app
     """
 
     await broker.start()
-    await broker.stream.add_stream(config=stream.config)
+    await broker.stream.add_stream(config=jstream.config)
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
 
@@ -73,7 +93,7 @@ async def instantiate_db_and_broker(app: FastAPI):
                 )
             )
         ).first() is None:
-            await add_account(
+            await register_account(
                 fullname="root",
                 email="admin@popug.com",
                 password="password",
@@ -109,14 +129,16 @@ async def register(register_details: RegisterDetails) -> str:
             )
         ).first()
         if account_with_email is not None:
-            raise HTTPException(status_code=400, detail="Email is taken")
-    await add_account(
+            raise HTTPException(
+                status_code=400, detail="Email with this email is already registered"
+            )
+    await register_account(
         fullname=register_details.fullname,
         email=register_details.email,
         password=register_details.password,
         role="user",
     )
-    return "Account created"
+    return "Account registered"
 
 
 @api.get("/login", response_class=PlainTextResponse)
@@ -147,17 +169,6 @@ async def login(login_details: LoginDetails) -> str:
         raise HTTPException(status_code=401, detail="Invalid email and/or password")
     token = auhtentificator.encode_token(
         account_with_email.public_id, account_with_email.role
-    )
-    await broker.publish(
-        orjson.dumps(
-            dict(
-                public_id=account_with_email.public_id,
-                email=account_with_email.email,
-                logined_at=datetime.now(),
-            )
-        ),
-        "accounts.account-logined",
-        stream=stream.name,
     )
 
     return token
@@ -208,8 +219,16 @@ async def change_role(
         session.add(account)
         await session.commit()
         await session.refresh(account)
-        msg = account.model_dump_json(
-            exclude={"password_hash", "created_at", "id"}
-        ).encode()
-    await broker.publish(msg, "accounts-streams.role-changed", stream=stream.name)
+        msg = AccountUpdated.v1.AccountUpdatedV1(
+            id=str(uuid.uuid4()),
+            time=datetime.now(),
+            data=AccountUpdated.v1.Data(
+                account_public_id=account.public_id, role=account.role
+            ),
+        )
+    await broker.publish(
+        msg.model_dump_json().encode(),
+        f"accounts-streams.{msg.name.value}.{msg.version.value}",
+        stream=jstream.name,
+    )
     return f"Role for {account.email} changed to {account.role}"
