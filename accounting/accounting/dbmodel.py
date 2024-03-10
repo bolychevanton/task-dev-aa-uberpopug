@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 
@@ -11,15 +11,20 @@ class Account(SQLModel, table=True):
     email: str
     role: str
     billing_cycle: int = Field(default=None, foreign_key="accounting_billing_cycles.id")
-    balance: float
+    balance: float = Field(default=0.0)
 
 
 class BillingCycle(SQLModel, table=True):
     __tablename__ = "accounting_billing_cycles"
     id: int = Field(default=None, primary_key=True)
-    start_date: datetime = Field(default_factory=datetime.now)
-    end_date: datetime
-    status: str
+    start_date: datetime = Field(
+        default_factory=lambda: datetime.combine(date.today(), datetime.min.time())
+    )
+    end_date: datetime = Field(
+        default_factory=lambda: datetime.combine(date.today(), datetime.max.time())
+    )
+    status: str = Field(default="active")
+    account_public_id: str = Field(index=True)
 
 
 class Payment(SQLModel, table=True):

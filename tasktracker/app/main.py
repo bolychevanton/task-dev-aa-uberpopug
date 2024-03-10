@@ -31,7 +31,7 @@ from tasktracker.eventschema.tasktracker import (
 from tasktracker.eventschema.auth import AccountUpdated, AccountCreated
 
 broker = NatsBroker(nats_url)
-jstream = JStream(name="tasktracker", subjects=["tasks-lifecycle.*", "tasks-streams.*"])
+jstream = JStream(name="tasktracker", subjects=["tasks-lifecycle.>", "tasks-streams.>"])
 authorizer = Authorizer(key=public_key, algorithm=algorithm)
 engine = create_async_engine(db_url, echo=True)
 
@@ -60,8 +60,8 @@ async def random_popugs(size: int = 1) -> list[str]:
 
 
 @broker.subscriber(
-    subject=f"accounts-streams.{AccountCreated.v1.Name.ACCOUNTCREATED}.{AccountCreated.v1.Version.V1}",
-    durable=f"accounts-streams.{AccountCreated.v1.Name.ACCOUNTCREATED}.{AccountCreated.v1.Version.V1}",
+    subject=f"accounts-streams.{AccountCreated.v1.Name.ACCOUNTCREATED.value}.{AccountCreated.v1.Version.V1.value}",
+    durable="AccountCreatedV1",
     stream=JStream(name="auth", declare=False),
     description="Handles event of new account creation.",
 )
@@ -79,8 +79,8 @@ async def handle_create_account(msg: AccountCreated.v1.AccountCreatedV1):
 
 
 @broker.subscriber(
-    subject=f"accounts-streams.{AccountUpdated.v1.Name.ACCOUNTUPDATED}.{AccountUpdated.v1.Version.V1}",
-    durable=f"accounts-streams.{AccountUpdated.v1.Name.ACCOUNTUPDATED}.{AccountUpdated.v1.Version.V1}",
+    subject=f"accounts-streams.{AccountUpdated.v1.Name.ACCOUNTUPDATED.value}.{AccountUpdated.v1.Version.V1.value}",
+    durable="AccountUpdatedV1",
     stream=JStream(name="auth", declare=False),
     deliver_policy="all",
 )
@@ -157,6 +157,7 @@ async def add_task(title: str, description: str):
             public_id=str(uuid.uuid4()),
             description=description,
             assigned_to=random_popug[0],
+            title=title,
         )
         session.add(new_task)
         await session.commit()
@@ -177,7 +178,7 @@ async def add_task(title: str, description: str):
             stream=jstream.name,
         )
 
-        msg = TaskAssigned.v1.TaskAssignedV1(
+        msg_assign = TaskAssigned.v1.TaskAssignedV1(
             id=str(uuid.uuid4()),
             time=datetime.now(),
             data=TaskAssigned.v1.Data(
@@ -186,8 +187,8 @@ async def add_task(title: str, description: str):
             ),
         )
         await broker.publish(
-            msg.model_dump_json().encode(),
-            f"tasks-lifecycle.{msg.name.value}.{msg.version.value}",
+            msg_assign.model_dump_json().encode(),
+            f"tasks-lifecycle.{msg_assign.name.value}.{msg_assign.version.value}",
             stream=jstream.name,
         )
 
@@ -289,7 +290,7 @@ async def show_my_tasks(
 
 
 @api.post("/complete-task", status_code=200)
-async def complete_task(id: int, account_public_id: str = Depends(authorizer)):
+async def complete_task(task_id: int, account_public_id: str = Depends(authorizer)):
     """Closes tasks assigned to authorized popug.
 
     Args:
@@ -305,7 +306,9 @@ async def complete_task(id: int, account_public_id: str = Depends(authorizer)):
     """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         task = (
-            await session.exec(select(dbmodel.Task).where(col(dbmodel.Task.id) == id))
+            await session.exec(
+                select(dbmodel.Task).where(col(dbmodel.Task.id) == task_id)
+            )
         ).first()
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -313,6 +316,8 @@ async def complete_task(id: int, account_public_id: str = Depends(authorizer)):
             raise HTTPException(
                 status_code=403, detail="You are not assigned to this task"
             )
+        if task.status == "completed":
+            raise HTTPException(status_code=400, detail="Task already completed")
         task.status = "completed"
         session.add(task)
         await session.commit()

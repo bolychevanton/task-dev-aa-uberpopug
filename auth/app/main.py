@@ -26,7 +26,7 @@ from typing import Optional
 
 
 broker = NatsBroker(nats_url)
-jstream = JStream(name="auth", subjects=["accounts-streams.*"])
+jstream = JStream(name="auth", subjects=["accounts-streams.>"])
 auhtentificator = Authentificator(key=private_key, algorithm=algorithm, expire=expire)
 authorizer = Authorizer(key=public_key, algorithm=algorithm)
 engine = create_async_engine(db_url, echo=True)
@@ -55,7 +55,7 @@ async def register_account(fullname: str, email: str, password: str, role: str) 
             id=str(uuid.uuid4()),
             time=datetime.now(),
             data=AccountCreated.v1.Data(
-                public_id=new_account.public_id,
+                account_public_id=new_account.public_id,
                 email=new_account.email,
                 role=role,
                 fullname=fullname,
@@ -214,7 +214,6 @@ async def change_role(
         if account is None:
             raise HTTPException(status_code=404, detail="Account not found")
         account.role = role
-        account.updated_at = datetime.now()
 
         session.add(account)
         await session.commit()

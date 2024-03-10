@@ -5,7 +5,7 @@ from rocketry.args import Arg
 from accounting.config import nats_url
 from faststream.nats import NatsBroker, JStream
 from rocketry.conds import daily
-
+from datetime import datetime, date, timedelta
 
 app = Rocketry(execution="async")
 
@@ -20,8 +20,11 @@ async def start_app():
         await app.serve()
 
 
-@app.task(daily.after("23:59"), execution="async")
+@app.task(daily.after("23:50"), execution="async")
 async def close_billing_cycles(broker: NatsBroker = Arg("broker")):
+    tommorow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+    new_billing_cycle_start = datetime.combine(tommorow, datetime.min.time())
+    new_billing_cycle_end = datetime.combine(tommorow, datetime.max.time())
     await broker.publish("Hi, Rocketry!", "test", stream=jstream.name)
 
 
