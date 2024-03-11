@@ -1,4 +1,3 @@
-# regular FastStream code
 from faststream.nats import NatsBroker, JStream
 from accounting.config import nats_url
 from accounting.eventschema.accounting import EndOfDayHappened
