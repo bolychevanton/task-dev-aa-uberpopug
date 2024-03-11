@@ -27,10 +27,8 @@ from faststream import FastStream
 
 broker = NatsBroker(nats_url)
 app = FastStream(broker)
-jstream = JStream(name="accounting", subjects=["cron.>", "transactions.>"])
+jstream = JStream(name="accounting", subjects=["cron-streams.>", "transactions.>"])
 engine = create_async_engine(db_url, echo=False)
-
-# cron_app = Rocketry(execution="async")
 
 
 @app.on_startup
@@ -39,15 +37,9 @@ async def create_tables():
     await broker.stream.add_stream(config=jstream.config)
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
-    # await cron_app.serve()
 
 
-# @cron_app.task("every 5 seconds", execution="async")
-# async def print_hello():
-#     print("hello")
-
-
-async def get_active_billing_cycle_id(
+async def get_active_billing_cycle(
     session: AsyncSession, public_id: str
 ) -> Optional[dbmodel.BillingCycle]:
     return (
@@ -109,7 +101,7 @@ async def handle_create_account_other(msg: AccountCreated.v1.AccountCreatedV1):
                     email=msg.data.email,
                     role=msg.data.role,
                     billing_cycle=(
-                        await get_active_billing_cycle_id(
+                        await get_active_billing_cycle(
                             session, msg.data.account_public_id
                         )
                     ).id,
@@ -177,11 +169,9 @@ async def apply_transaction_for_task_assignment(msg: TaskAssigned.v1.TaskAssigne
         account = await get_account(session, msg.data.assigned_to)
         if account is None:
             raise Exception("Account not found. Sending to DLQ.")
-
+        bc = await get_active_billing_cycle(session, msg.data.assigned_to)
         transaction = dbmodel.Transaction(
-            billing_cycle=await get_active_billing_cycle_id(
-                session, msg.data.assigned_to
-            ),
+            billing_cycle=bc.id,
             public_id=str(uuid.uuid4()),
             account_id=msg.data.assigned_to,
             credit=0.0,
@@ -200,6 +190,9 @@ async def apply_transaction_for_task_assignment(msg: TaskAssigned.v1.TaskAssigne
             id=str(uuid.uuid4()),
             time=datetime.now(),
             data=FinTransactionApplied.v1.Data(
+                billing_cycle_id=bc.id,
+                billing_cycle_start=bc.start_date,
+                billing_cycle_end=bc.end_date,
                 account_public_id=msg.data.assigned_to,
                 type=FinTransactionApplied.v1.TransactionType.ENROLLMENT.value,
                 description=f"{FinTransactionApplied.v1.TransactionType.ENROLLMENT.value} for task {task.title}",
@@ -224,7 +217,7 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
 
         task = await get_task(session, msg.data.task_public_id)
         account = await get_account(session, task.assigned_to)
-        bc = await get_active_billing_cycle_id(session, task.assigned_to)
+        bc = await get_active_billing_cycle(session, task.assigned_to)
         transaction = dbmodel.Transaction(
             billing_cycle=bc.id,
             public_id=str(uuid.uuid4()),
@@ -262,7 +255,7 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
 
 
 @broker.subscriber(
-    subject=f"cron.{EndOfDayHappened.v1.Name.ENDOFDAYHAPPENED.value}.{EndOfDayHappened.v1.Version.V1.value}",
+    subject=f"cron-streams.{EndOfDayHappened.v1.Name.ENDOFDAYHAPPENED.value}.{EndOfDayHappened.v1.Version.V1.value}",
     durable="AccountingEndOfDayHappenedV1",
     stream=JStream(name="accounting", declare=False),
     retry=True,  # will retry to consume the message if it callback fails
@@ -334,11 +327,40 @@ async def close_billing_cycles():
             )
 
 
+async def send_email(email: str, transactions: list[dbmodel.Transaction]):
+    """Mock function of sending email"""
+    print("Sending mock email to ", email, "with", len(transactions), "transactions")
+
+
 @broker.subscriber(
-    subject=f"accounting.{FinTransactionApplied.v1.Name.FINTRANSACTIONAPPLIED.value}.{FinTransactionApplied.v1.Version.V1.value}",
+    subject=f"transactions.{FinTransactionApplied.v1.Name.FINTRANSACTIONAPPLIED.value}.{FinTransactionApplied.v1.Version.V1.value}",
     durable="AccountingFinTransactionAppliedV1",
     stream=JStream(name="accounting", declare=False),
     retry=True,  # will retry to consume the message if it callback fails
 )
-async def process_payment():
-    pass
+async def process_payment(msg: FinTransactionApplied.v1.FinTransactionAppliedV1):
+    if msg.data.type == FinTransactionApplied.v1.TransactionType.PAYMENT:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            session.add(
+                dbmodel.Payment(status="paid", billing_cycle=msg.data.billing_cycle_id)
+            )
+
+            await session.commit()
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            transactions = (
+                await session.exec(
+                    select(dbmodel.Transaction).where(
+                        dbmodel.Transaction.billing_cycle == msg.data.billing_cycle_id
+                    )
+                )
+            ).all()
+            email = (
+                await session.exec(
+                    select(dbmodel.Account.email).where(
+                        dbmodel.Account.public_id == msg.data.account_public_id
+                    )
+                )
+            ).first()
+
+            await send_email(email, transactions)

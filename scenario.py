@@ -81,8 +81,8 @@ import json
 for idx in range(1, 4):
 
     tasks = json.loads(my_tasks("worker", idx).text)
-    if len(tasks) > 0:
-        complete_task("worker", idx, tasks[0]["id"])  # tasks[0]["id"]
+    for task in tasks:
+        complete_task("worker", idx, task["id"])  # tasks[0]["id"]
 
 # # print(
 #     requests.get(
