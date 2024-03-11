@@ -73,7 +73,7 @@ create_task("worker", 2, "sixth", "desc2")
 create_task("worker", 3, "seventh", "desc3")
 create_task("manager", 1, "eightth", "desc4")
 
-shuffle_tasks("manager", 1)
+# shuffle_tasks("manager", 1)
 # print(login("worker", 1))
 
 import json
@@ -83,7 +83,6 @@ for idx in range(1, 4):
     tasks = json.loads(my_tasks("worker", idx).text)
     if len(tasks) > 0:
         complete_task("worker", idx, tasks[0]["id"])  # tasks[0]["id"]
-        break
 
 # # print(
 #     requests.get(

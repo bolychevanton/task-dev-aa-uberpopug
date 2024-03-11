@@ -1,0 +1,44 @@
+{
+    "type": "record",
+    "name": "EndOfDayHappenedV1",
+    "fields": [
+        {
+            "name": "id",
+            "type": "string"
+        },
+        {
+            "name": "time",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            }
+        },
+        {
+            "name": "name",
+            "type": {
+                "type": "enum",
+                "name": "Name",
+                "symbols": [
+                    "EndOfDayHappened"
+                ]
+            },
+            "default": "EndOfDayHappened"
+        },
+        {
+            "name": "version",
+            "type": {
+                "type": "enum",
+                "name": "Version",
+                "symbols": [
+                    "v1"
+                ]
+            },
+            "default": "v1"
+        },
+        {
+            "name": "producer",
+            "type": "string",
+            "default": "accounting"
+        }
+    ]
+}

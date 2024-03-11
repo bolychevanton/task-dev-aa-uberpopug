@@ -6,7 +6,7 @@ from accounting.eventschema.tasktracker import (
     TaskAdded,
 )
 from accounting.eventschema.auth import AccountUpdated, AccountCreated
-from accounting.eventschema.accounting import FinTransactionApplied
+from accounting.eventschema.accounting import FinTransactionApplied, EndOfDayHappened
 from accounting import dbmodel
 from typing import Any
 from sqlalchemy.ext.asyncio.engine import create_async_engine
@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 import numpy as np
+from datetime import date, timedelta
 
 generate_events_from_avro_schemas(service_root)
 
@@ -23,10 +24,13 @@ generate_events_from_avro_schemas(service_root)
 from faststream.nats import NatsBroker, JStream
 from faststream import FastStream
 
+
 broker = NatsBroker(nats_url)
 app = FastStream(broker)
-jstream = JStream(name="accounting", subjects=["transactions.>"])
+jstream = JStream(name="accounting", subjects=["cron.>", "transactions.>"])
 engine = create_async_engine(db_url, echo=False)
+
+# cron_app = Rocketry(execution="async")
 
 
 @app.on_startup
@@ -35,6 +39,12 @@ async def create_tables():
     await broker.stream.add_stream(config=jstream.config)
     async with engine.begin() as conn:
         await conn.run_sync(dbmodel.SQLModel.metadata.create_all)
+    # await cron_app.serve()
+
+
+# @cron_app.task("every 5 seconds", execution="async")
+# async def print_hello():
+#     print("hello")
 
 
 async def get_active_billing_cycle_id(
@@ -173,13 +183,13 @@ async def apply_transaction_for_task_assignment(msg: TaskAssigned.v1.TaskAssigne
             public_id=str(uuid.uuid4()),
             account_id=msg.data.assigned_to,
             credit=0.0,
-            debit=task.complete_task_cost,
+            debit=task.assign_task_cost,
             type=FinTransactionApplied.v1.TransactionType.ENROLLMENT.value,
             task_public_id=msg.data.task_public_id,
             description=f"{FinTransactionApplied.v1.TransactionType.ENROLLMENT.value} for task {task.title}",
         )
 
-        account.balance -= task.complete_task_cost
+        account.balance -= task.assign_task_cost
         session.add(transaction)
         session.add(account)
         await session.commit()
@@ -217,14 +227,14 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
             billing_cycle=await get_active_billing_cycle_id(session, task.assigned_to),
             public_id=str(uuid.uuid4()),
             account_id=task.assigned_to,
-            credit=task.assign_task_cost,
+            credit=task.complete_task_cost,
             debit=0.0,
             type=FinTransactionApplied.v1.TransactionType.WITHDRAWAL.value,
             task_public_id=msg.data.task_public_id,
             description=f"{FinTransactionApplied.v1.TransactionType.WITHDRAWAL.value} for task {task.title}",
         )
 
-        account.balance += task.assign_task_cost
+        account.balance += task.complete_task_cost
         session.add(transaction)
         session.add(account)
         await session.commit()
@@ -244,3 +254,73 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
             f"transactions.{msg.name.value}.{msg.version.value}",
             stream=jstream.name,
         )
+
+
+@broker.subscriber(
+    subject=f"cron.{EndOfDayHappened.v1.Name.ENDOFDAYHAPPENED.value}.{EndOfDayHappened.v1.Version.V1.value}",
+    durable="AccountingEndOfDayHappenedV1",
+    stream=JStream(name="accounting", declare=False),
+    retry=True,  # will retry to consume the message if it callback fails
+)
+async def close_billing_cycles():
+    tommorow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+    new_billing_cycle_start = datetime.combine(tommorow, datetime.min.time())
+    new_billing_cycle_end = datetime.combine(tommorow, datetime.max.time())
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        open_billing_cycles = await session.exec(
+            select(dbmodel.BillingCycle).where(dbmodel.BillingCycle.status == "active")
+        )
+        msgs: list[FinTransactionApplied.v1.FinTransactionAppliedV1] = []
+        for bc in open_billing_cycles:
+            account = (
+                await session.exec(
+                    select(dbmodel.Account).where(
+                        dbmodel.Account.public_id == bc.account_public_id
+                    )
+                )
+            ).first()
+            if account is not None and account.balance > 0:
+                transaction = dbmodel.Transaction(
+                    billing_cycle=bc.id,
+                    public_id=str(uuid.uuid4()),
+                    account_id=account.public_id,
+                    credit=0.0,
+                    debit=account.balance,
+                    type=FinTransactionApplied.v1.TransactionType.PAYMENT.value,
+                    description=f"{FinTransactionApplied.v1.TransactionType.PAYMENT.value} for billing cycle {bc.start_date}-{bc.end_date}",
+                )
+
+                account.balance = 0
+                session.add(transaction)
+                session.add(account)
+
+                msgs.append(
+                    FinTransactionApplied.v1.FinTransactionAppliedV1(
+                        id=str(uuid.uuid4()),
+                        time=datetime.now(),
+                        data=FinTransactionApplied.v1.Data(
+                            account_public_id=bc.account_public_id,
+                            type=FinTransactionApplied.v1.TransactionType.PAYMENT.value,
+                            description=f"{FinTransactionApplied.v1.TransactionType.PAYMENT.value} for billing cycle {bc.start_date}-{bc.end_date}",
+                            amount=account.balance,
+                        ),
+                    )
+                )
+
+            bc.status = "closed"
+            session.add(bc)
+            session.add(
+                dbmodel.BillingCycle(
+                    start_date=new_billing_cycle_start,
+                    end_date=new_billing_cycle_end,
+                    account_public_id=bc.account_public_id,
+                )
+            )
+        await session.commit()
+
+        for msg in msgs:
+            await broker.publish(
+                msg.model_dump_json().encode(),
+                f"transactions.{msg.name.value}.{msg.version.value}",
+                stream=jstream.name,
+            )

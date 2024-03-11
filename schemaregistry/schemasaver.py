@@ -182,3 +182,20 @@ class FinTransactionAppliedV1(AvroBaseModel):
 
 
 save_schema(FinTransactionAppliedV1, schemas / "accounting")
+
+
+class EndOfDayHappenedV1(AvroBaseModel):
+    class Name(Enum):
+        name = "EndOfDayHappened"
+
+    class Version(Enum):
+        version = "v1"
+
+    id: str
+    time: datetime
+    name: Name = Name.name
+    version: Version = Version.version
+    producer: str = "accounting"
+
+
+save_schema(EndOfDayHappenedV1, schemas / "accounting")
