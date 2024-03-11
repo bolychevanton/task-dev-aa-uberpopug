@@ -49,10 +49,10 @@ async def create_tables():
 
 async def get_active_billing_cycle_id(
     session: AsyncSession, public_id: str
-) -> Optional[int]:
+) -> Optional[dbmodel.BillingCycle]:
     return (
         await session.exec(
-            select(dbmodel.BillingCycle.id)
+            select(dbmodel.BillingCycle)
             .where(dbmodel.BillingCycle.status == "active")
             .where(dbmodel.BillingCycle.account_public_id == public_id)
         )
@@ -108,9 +108,11 @@ async def handle_create_account_other(msg: AccountCreated.v1.AccountCreatedV1):
                     fullname=msg.data.fullname,
                     email=msg.data.email,
                     role=msg.data.role,
-                    billing_cycle=await get_active_billing_cycle_id(
-                        session, msg.data.account_public_id
-                    ),
+                    billing_cycle=(
+                        await get_active_billing_cycle_id(
+                            session, msg.data.account_public_id
+                        )
+                    ).id,
                 )
             )
             await session.commit()
@@ -201,7 +203,7 @@ async def apply_transaction_for_task_assignment(msg: TaskAssigned.v1.TaskAssigne
                 account_public_id=msg.data.assigned_to,
                 type=FinTransactionApplied.v1.TransactionType.ENROLLMENT.value,
                 description=f"{FinTransactionApplied.v1.TransactionType.ENROLLMENT.value} for task {task.title}",
-                amount=task.complete_task_cost,
+                amount=task.assign_task_cost,
             ),
         )
         await broker.publish(
@@ -222,9 +224,9 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
 
         task = await get_task(session, msg.data.task_public_id)
         account = await get_account(session, task.assigned_to)
-
+        bc = await get_active_billing_cycle_id(session, task.assigned_to)
         transaction = dbmodel.Transaction(
-            billing_cycle=await get_active_billing_cycle_id(session, task.assigned_to),
+            billing_cycle=bc.id,
             public_id=str(uuid.uuid4()),
             account_id=task.assigned_to,
             credit=task.complete_task_cost,
@@ -243,10 +245,13 @@ async def apply_transaction_for_task_completion(msg: TaskCompleted.v1.TaskComple
             id=str(uuid.uuid4()),
             time=datetime.now(),
             data=FinTransactionApplied.v1.Data(
+                billing_cycle_id=bc.id,
+                billing_cycle_end=bc.end_date,
+                billing_cycle_start=bc.start_date,
                 account_public_id=task.assigned_to,
                 type=FinTransactionApplied.v1.TransactionType.WITHDRAWAL.value,
                 description=f"{FinTransactionApplied.v1.TransactionType.WITHDRAWAL.value} for task {task.title}",
-                amount=task.assign_task_cost,
+                amount=task.complete_task_cost,
             ),
         )
         await broker.publish(
@@ -299,6 +304,9 @@ async def close_billing_cycles():
                         id=str(uuid.uuid4()),
                         time=datetime.now(),
                         data=FinTransactionApplied.v1.Data(
+                            billing_cycle_id=bc.id,
+                            billing_cycle_end=bc.end_date,
+                            billing_cycle_start=bc.start_date,
                             account_public_id=bc.account_public_id,
                             type=FinTransactionApplied.v1.TransactionType.PAYMENT.value,
                             description=f"{FinTransactionApplied.v1.TransactionType.PAYMENT.value} for billing cycle {bc.start_date}-{bc.end_date}",
@@ -324,3 +332,13 @@ async def close_billing_cycles():
                 f"transactions.{msg.name.value}.{msg.version.value}",
                 stream=jstream.name,
             )
+
+
+@broker.subscriber(
+    subject=f"accounting.{FinTransactionApplied.v1.Name.FINTRANSACTIONAPPLIED.value}.{FinTransactionApplied.v1.Version.V1.value}",
+    durable="AccountingFinTransactionAppliedV1",
+    stream=JStream(name="accounting", declare=False),
+    retry=True,  # will retry to consume the message if it callback fails
+)
+async def process_payment():
+    pass

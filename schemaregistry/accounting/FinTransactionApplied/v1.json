@@ -47,6 +47,24 @@
                 "name": "Data",
                 "fields": [
                     {
+                        "name": "billing_cycle_id",
+                        "type": "long"
+                    },
+                    {
+                        "name": "billing_cycle_start",
+                        "type": {
+                            "type": "long",
+                            "logicalType": "timestamp-millis"
+                        }
+                    },
+                    {
+                        "name": "billing_cycle_end",
+                        "type": {
+                            "type": "long",
+                            "logicalType": "timestamp-millis"
+                        }
+                    },
+                    {
                         "name": "account_public_id",
                         "type": "string"
                     },

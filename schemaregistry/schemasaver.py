@@ -168,6 +168,9 @@ class FinTransactionAppliedV1(AvroBaseModel):
             withdrawal = "withdrawal"
             payment = "payment"
 
+        billing_cycle_id: int
+        billing_cycle_start: datetime
+        billing_cycle_end: datetime
         account_public_id: str
         type: TransactionType
         description: str
