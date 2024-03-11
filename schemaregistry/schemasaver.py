@@ -187,6 +187,29 @@ class FinTransactionAppliedV1(AvroBaseModel):
 save_schema(FinTransactionAppliedV1, schemas / "accounting")
 
 
+class TaskCostsGeneratedV1(AvroBaseModel):
+    class Name(Enum):
+        name = "TaskCostsGenerated"
+
+    class Version(Enum):
+        version = "v1"
+
+    class Data(AvroBaseModel):
+        task_public_id: str
+        assign_cost: float
+        complete_cost: float
+
+    id: str
+    time: datetime
+    name: Name = Name.name
+    version: Version = Version.version
+    producer: str = "accounting"
+    data: Data
+
+
+save_schema(TaskCostsGeneratedV1, schemas / "accounting")
+
+
 class EndOfDayHappenedV1(AvroBaseModel):
     class Name(Enum):
         name = "EndOfDayHappened"

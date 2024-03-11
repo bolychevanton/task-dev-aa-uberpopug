@@ -6,7 +6,11 @@ from accounting.eventschema.tasktracker import (
     TaskAdded,
 )
 from accounting.eventschema.auth import AccountUpdated, AccountCreated
-from accounting.eventschema.accounting import FinTransactionApplied, EndOfDayHappened
+from accounting.eventschema.accounting import (
+    FinTransactionApplied,
+    EndOfDayHappened,
+    TaskCostsGenerated,
+)
 from accounting import dbmodel
 from typing import Any
 from sqlalchemy.ext.asyncio.engine import create_async_engine
@@ -27,7 +31,10 @@ from faststream import FastStream
 
 broker = NatsBroker(nats_url)
 app = FastStream(broker)
-jstream = JStream(name="accounting", subjects=["cron-streams.>", "transactions.>"])
+jstream = JStream(
+    name="accounting",
+    subjects=["cron-streams.>", "transactions.>", "accounting-tasks-streams.>"],
+)
 engine = create_async_engine(db_url, echo=False)
 
 
@@ -79,7 +86,7 @@ async def get_task(
     stream=JStream(name="auth", declare=False),
     description="Handles event of new account creation.",
 )
-async def handle_create_account_other(msg: AccountCreated.v1.AccountCreatedV1):
+async def handle_create_account(msg: AccountCreated.v1.AccountCreatedV1):
     async with AsyncSession(engine, expire_on_commit=True) as active:
         account = await get_account(active, msg.data.account_public_id)
 
@@ -141,16 +148,33 @@ async def handle_update_account(msg: AccountUpdated.v1.AccountUpdatedV1):
 )
 async def add_task_to_db(msg: TaskAdded.v1.TaskAddedV1):
     async with AsyncSession(engine, expire_on_commit=False) as session:
+        assing_task_cost = float(np.random.randint(10, 20))
+        complete_task_cost = float(np.random.randint(20, 40))
+
         task = dbmodel.Task(
             public_id=msg.data.task_public_id,
             title=msg.data.title,
             description=msg.data.description,
             assigned_to=msg.data.assigned_to,
-            assign_task_cost=float(np.random.randint(10, 20)),
-            complete_task_cost=float(np.random.randint(20, 40)),
+            assign_task_cost=assing_task_cost,
+            complete_task_cost=complete_task_cost,
         )
         session.add(task)
         await session.commit()
+        msg = TaskCostsGenerated.v1.TaskCostsGeneratedV1(
+            id=str(uuid.uuid4()),
+            time=datetime.now(),
+            data=TaskCostsGenerated.v1.Data(
+                task_public_id=msg.data.task_public_id,
+                assign_cost=assing_task_cost,
+                complete_cost=complete_task_cost,
+            ),
+        )
+        await broker.publish(
+            msg.model_dump_json().encode(),
+            subject=f"accounting-tasks-streams.{msg.name.value}.{msg.version.value}",
+            stream=jstream.name,
+        )
 
 
 @broker.subscriber(
