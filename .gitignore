@@ -1,0 +1,6 @@
+*__pycache__*
+.python-version
+.vscode/*
+data/*
+.env
+*.pytest_cache*
