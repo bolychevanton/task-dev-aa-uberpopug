@@ -1,0 +1,69 @@
+{
+    "type": "record",
+    "name": "AccountCreatedV1",
+    "fields": [
+        {
+            "name": "id",
+            "type": "string"
+        },
+        {
+            "name": "time",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            }
+        },
+        {
+            "name": "name",
+            "type": {
+                "type": "enum",
+                "name": "Name",
+                "symbols": [
+                    "AccountCreated"
+                ]
+            },
+            "default": "AccountCreated"
+        },
+        {
+            "name": "version",
+            "type": {
+                "type": "enum",
+                "name": "Version",
+                "symbols": [
+                    "v1"
+                ]
+            },
+            "default": "v1"
+        },
+        {
+            "name": "producer",
+            "type": "string",
+            "default": "auth"
+        },
+        {
+            "name": "data",
+            "type": {
+                "type": "record",
+                "name": "Data",
+                "fields": [
+                    {
+                        "name": "account_public_id",
+                        "type": "string"
+                    },
+                    {
+                        "name": "fullname",
+                        "type": "string"
+                    },
+                    {
+                        "name": "email",
+                        "type": "string"
+                    },
+                    {
+                        "name": "role",
+                        "type": "string"
+                    }
+                ]
+            }
+        }
+    ]
+}

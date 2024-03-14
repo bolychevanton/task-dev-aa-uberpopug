@@ -21,7 +21,6 @@ class Task(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     public_id: str = Field(unique=True, index=True)
     status: str = Field(default="open")
+    title: str = Field(unique=True, index=True)
     description: str
     assigned_to: str = Field(foreign_key="tt_accounts.public_id")
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)

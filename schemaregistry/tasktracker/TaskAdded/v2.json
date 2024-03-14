@@ -1,0 +1,73 @@
+{
+    "type": "record",
+    "name": "TaskAddedV2",
+    "fields": [
+        {
+            "name": "id",
+            "type": "string"
+        },
+        {
+            "name": "time",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            }
+        },
+        {
+            "name": "name",
+            "type": {
+                "type": "enum",
+                "name": "Name",
+                "symbols": [
+                    "TaskAdded"
+                ]
+            },
+            "default": "TaskAdded"
+        },
+        {
+            "name": "version",
+            "type": {
+                "type": "enum",
+                "name": "Version",
+                "symbols": [
+                    "v2"
+                ]
+            },
+            "default": "v2"
+        },
+        {
+            "name": "producer",
+            "type": "string",
+            "default": "tasktracker"
+        },
+        {
+            "name": "data",
+            "type": {
+                "type": "record",
+                "name": "Data",
+                "fields": [
+                    {
+                        "name": "title",
+                        "type": "string"
+                    },
+                    {
+                        "name": "jira_id",
+                        "type": "long"
+                    },
+                    {
+                        "name": "description",
+                        "type": "string"
+                    },
+                    {
+                        "name": "task_public_id",
+                        "type": "string"
+                    },
+                    {
+                        "name": "assigned_to",
+                        "type": "string"
+                    }
+                ]
+            }
+        }
+    ]
+}

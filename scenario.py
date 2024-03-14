@@ -30,11 +30,11 @@ def create(role, id=""):
     )
 
 
-def create_task(role, role_id, description):
+def create_task(role, role_id, title, description):
     requests.post(
-        f"{tt_host}/create-task",
+        f"{tt_host}/add-task",
         headers={"Authorization": f"Bearer {login(role, role_id)}"},
-        params={"description": description},
+        params={"title": title, "description": description},
     )
 
 
@@ -48,28 +48,43 @@ def shuffle_tasks(role, id):
 def my_tasks(role, id):
     return requests.get(
         f"{tt_host}/tasks-me",
+        params={"status": "open"},
         headers={"Authorization": f"Bearer {login(role, id)}"},
     )
 
 
-# for idx in range(1, 4):
-#     create("worker", idx)
+def complete_task(role, id, task_id):
+    requests.post(
+        f"{tt_host}/complete-task",
+        headers={"Authorization": f"Bearer {login(role, id)}"},
+        params={"task_id": task_id},
+    )
 
-# for idx in range(1, 3):
-#     create("manager", idx)
 
-# for idx in range(1, 4):
-#     create_task("worker", 1, "worker" + str(1))
-#     create_task("worker", 2, "worker" + str(2))
-#     create_task("worker", 3, "worker" + str(3))
-#     create_task("manager", 1, "manager" + str(1))
+for idx in range(1, 4):
+    create("worker", idx)
+
+for idx in range(1, 3):
+    create("manager", idx)
+
+
+create_task("worker", 1, "fifth", "desc1")
+create_task("worker", 2, "sixth", "desc2")
+create_task("worker", 3, "seventh", "desc3")
+create_task("manager", 1, "eightth", "desc4")
 
 # shuffle_tasks("manager", 1)
 # print(login("worker", 1))
 
-print(my_tasks("worker", 1).text)
+import json
 
-# print(
+for idx in range(1, 4):
+
+    tasks = json.loads(my_tasks("worker", idx).text)
+    for task in tasks:
+        complete_task("worker", idx, task["id"])  # tasks[0]["id"]
+
+# # print(
 #     requests.get(
 #         f"{tt_host}/tasks/me",
 #         headers={"Authorization": f"Bearer {login('worker', 1)}"},
