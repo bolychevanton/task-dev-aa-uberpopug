@@ -1,5 +1,9 @@
 """Facilitates the creation of Avro schemas from Pydantic models, thus, simplifying the process of creating schemas"""
 
+"""Note: this is fully utility file and used only for simplifying the process of schema creation. Do not read it!"""
+
+"""All schemas are generated automatically inside every service"""
+
 from dataclasses_avroschema.pydantic import AvroBaseModel
 from enum import Enum
 from datetime import datetime

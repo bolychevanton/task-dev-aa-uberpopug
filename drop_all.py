@@ -1,3 +1,6 @@
+# do not check this file, only for testing purposes
+
+
 from auth import dbmodel as auth_dbmodel
 from tasktracker import dbmodel as tt_dbmodel
 from accounting import dbmodel as acc_dbmodel
